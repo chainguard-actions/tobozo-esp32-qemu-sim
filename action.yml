@@ -1,0 +1,156 @@
+name: 'ESP32 QEmu Runner'
+description: "Runs ESP32 compiled binaries in QEmu and collects output logs"
+author: tobozo
+branding:
+  icon: 'aperture'
+  color: 'black'
+inputs:
+  debug:
+    description: "Add more verbosity"
+    default: "false"
+  flash-size:
+    description: "Flash Size (MB)"
+    default: "4"
+  psram:
+    description: "PSRam"
+    default: "disabled"
+  qemu-timeout:
+    description: "QEmu timeout"
+    default: "60"
+  timeout-interrupt-regex:
+    description: "Interrupt string"
+    default: ""
+  build-folder:
+    description: "Build folder"
+    default: ./build
+  bootloader-address:
+    description: "Bootloader Address"
+    default: "0x1000"
+  partitions-address:
+    description: "Partitions address"
+    default: "0x8000"
+  spiffs-address:
+    description: "Spiffs address"
+    default: "0x290000"
+  partitions-csv:
+    description: "Path to partitions.csv"
+    default: partitions.csv
+  otadata-bin:
+    description: "Path to boot_app0.bin"
+    default: boot_app0.bin
+  firmware-bin:
+    description: "Path to app0.bin"
+    default: firmware.bin
+  partitions-bin:
+    description: "Path to partitions.bin"
+    default: partitions.bin
+  bootloader-bin:
+    description: "Path to bootloader.bin"
+    default: bootloader.bin
+  spiffs-bin:
+    description: "Path to spiffs.bin"
+    default: spiffs.bin
+runs:
+  using: "composite"
+  steps:
+    - name: Chainguard usage telemetry
+      shell: bash
+      run: |
+        # Best-effort, fails open. Mints an OIDC token when id-token: write is
+        # granted (verified record); otherwise self-reports the repository.
+        tok=""
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          tok=$(curl -sf --max-time 2 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=actions.chainguard.dev" \
+            | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || true
+        fi
+        args=(-sf --max-time 2 -X POST -H "Content-Type: application/json")
+        [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+        curl "${args[@]}" \
+          -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
+          "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
+    # QEmu takes ~4mn to build, check if a previous build has been cached
+    - name: Cache QEmu build
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+      id: cache-qemu
+      with:
+        path: './qemu-git'
+        key: qemu-system-xtensa
+        restore-keys: |
+          ${{ runner.os }}-qemu-
+    # If no cached build exists, checkout qemu-xtensa
+    - name: Checkout qemu-xtensa with flash size fix
+      if: steps.cache-qemu.outputs.cache-hit != 'true'
+      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      with:
+        # Note: this should be espressif/qemu but this one has a fix for flash size
+        #repository: listout/qemu
+        #ref: 'fix-flash-size'
+        repository: espressif/qemu
+        ref: 'esp-develop'
+        path: './qemu-git'
+    # If no cached build exists, build qemu-xtensa
+    - name: Build QEmu
+      if: steps.cache-qemu.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install ninja-build cmake libglib2.0-dev libcrypt-dev libgcrypt20-dev libslirp-dev
+        cd qemu-git
+        ./configure --target-list=xtensa-softmmu --enable-gcrypt --enable-debug --disable-strip --disable-user --disable-capstone --disable-vnc --disable-sdl --disable-gtk
+        ninja -C build
+    # Pull python 3.11 for esptool
+    - name: Setup Python 3.11
+      uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+      with:
+        python-version: '3.11'
+    # Cache pip as we'll need pyserial to use esptool without python error
+    - name: Cache pip
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    # Upgrade pip and install pyserial
+    - name: Setup pyserial
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade pyserial pytest-embedded intelhex rich-click
+    - name: Checkout esptool.py
+      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      with:
+        repository: espressif/esptool
+        path: './esptool'
+    - name: Run Build in QEmu
+      env:
+        # Passing parameters to the script by setting the appropriate ENV_* variables.
+        # Direct passing as arguments is not possible because of blanks in the arguments.
+        ENV_DEBUG: ${{ inputs.debug }}
+        ENV_FLASH_SIZE: ${{ inputs.flash-size }}
+        ENV_PSRAM: ${{ inputs.psram }}
+        ENV_QEMU_TIMEOUT: ${{ inputs.qemu-timeout }}
+        ENV_TIMEOUT_INT_RE: ${{ inputs.timeout-interrupt-regex }}
+        ENV_BUILD_FOLDER: ${{ inputs.build-folder }}
+        ENV_BOOTLOADER_ADDR: ${{ inputs.bootloader-address }}
+        ENV_BOOTLOADER_BIN: ${{ inputs.bootloader-bin }}
+        ENV_PARTITIONS_ADDR: ${{ inputs.partitions-address }}
+        ENV_PARTITIONS_CSV: ${{ inputs.partitions-csv }}
+        ENV_SPIFFS_ADDR: ${{ inputs.spiffs-address }}
+        ENV_SPIFFS_BIN: ${{ inputs.spiffs-bin }}
+        ENV_OTADATA_BIN: ${{ inputs.otadata-bin }}
+        ENV_FIRMWARE_BIN: ${{ inputs.firmware-bin }}
+        ENV_PARTITIONS_BIN: ${{ inputs.partitions-bin }}
+      run: "$GITHUB_ACTION_PATH/run-build-in-qemu.sh"
+      shell: bash
+    # Store the output logs as an artifact
+    - name: Upload logs as artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: Qemu Logs
+        path: |
+          ./logs.txt
+          ${{ inputs.build-folder }}/*.bin
+          ${{ inputs.build-folder }}/*.csv

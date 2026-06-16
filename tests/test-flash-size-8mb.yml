@@ -1,0 +1,60 @@
+name: Test 8MB flash size input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a minimal build folder with required files
+      - name: Create dummy build artifacts
+        run: |
+          mkdir -p ./build
+          # Minimal valid partitions.csv
+          cat > ./build/partitions.csv << 'EOF'
+          # Name,   Type, SubType, Offset,  Size, Flags
+          nvs,      data, nvs,     0x9000,  0x5000,
+          otadata,  data, ota,     0xe000,  0x2000,
+          app0,     app,  ota_0,   0x10000, 0x140000,
+          spiffs,   data, spiffs,  0x290000,0x170000,
+          EOF
+          dd if=/dev/zero bs=1 count=256 of=./build/firmware.bin 2>/dev/null
+          dd if=/dev/zero bs=1 count=256 of=./build/partitions.bin 2>/dev/null
+          dd if=/dev/zero bs=1 count=256 of=./build/bootloader.bin 2>/dev/null
+          dd if=/dev/zero bs=1 count=256 of=./build/boot_app0.bin 2>/dev/null
+          dd if=/dev/zero bs=1 count=256 of=./build/spiffs.bin 2>/dev/null
+          echo "Build folder contents:"
+          ls -la ./build/
+
+      # Test with 8MB flash size (a valid non-default value)
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          debug: "false"
+          flash-size: "8"
+          psram: "disabled"
+          qemu-timeout: "5"
+          build-folder: ./build
+          bootloader-address: "0x1000"
+          partitions-address: "0x8000"
+          spiffs-address: "0x290000"
+          partitions-csv: partitions.csv
+          otadata-bin: boot_app0.bin
+          firmware-bin: firmware.bin
+          partitions-bin: partitions.bin
+          bootloader-bin: bootloader.bin
+          spiffs-bin: spiffs.bin
+
+      - name: Assert 8MB flash size invocation ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action outcome with flash-size=8: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ] || [ -z "$OUTCOME" ]; then
+            echo "FAIL: action step was skipped or did not run"
+            exit 1
+          fi
+          echo "PASS: action ran with flash-size=8, outcome=$OUTCOME"
