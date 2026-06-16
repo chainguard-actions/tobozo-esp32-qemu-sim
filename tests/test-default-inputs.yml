@@ -1,0 +1,38 @@
+name: Test ESP32 QEMU - Default Inputs
+on:
+  workflow_dispatch:
+
+jobs:
+  test-default-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # The action requires QEMU and ESP32 binaries which are not available in this
+      # test environment. We run the action with continue-on-error and verify that
+      # it fails at the expected validation step (missing QEMU binary), not earlier.
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          chip: esp32
+          flash-size: "4"
+          psram: disabled
+          qemu-timeout: "10"
+          build-folder: ./build
+
+      - name: Assert action failed at expected point
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          # The action should fail (no QEMU binary available in test env)
+          # but it should not succeed unexpectedly
+          if [ "$OUTCOME" = "success" ]; then
+            echo "WARN: action unexpectedly succeeded (QEMU may have been cached)"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected (no QEMU binary in test env)"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi

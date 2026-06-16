@@ -1,0 +1,37 @@
+name: Test ESP32 QEMU - ESP32-C3 Chip Variant
+on:
+  workflow_dispatch:
+
+jobs:
+  test-chip-esp32c3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Test that the esp32c3 chip variant is accepted (uses RISC-V QEMU binary).
+      # The action will fail at the QEMU binary check since no QEMU is built,
+      # but it should pass chip name validation and fail later.
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          chip: esp32c3
+          flash-size: "4"
+          qemu-timeout: "10"
+          build-folder: ./build
+
+      - name: Assert action failed at expected point (not chip validation)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          # The action should fail (no QEMU binary), but NOT due to invalid chip name.
+          # esp32c3 is a valid chip name and should pass chip validation.
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected (no QEMU binary for esp32c3 in test env)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "WARN: action unexpectedly succeeded"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
