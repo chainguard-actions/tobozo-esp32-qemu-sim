@@ -8,6 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
+| v1.0.5 | [`v1.0.5`](https://github.com/chainguard-actions/tobozo-esp32-qemu-sim/tree/v1.0.5) | [`19325ef`](https://github.com/tobozo/esp32-qemu-sim/commit/19325ef1f5a728fcf548b15d2263e7d6f2ee7fe5) |
 | v2.0.1 | [`v2.0.1`](https://github.com/chainguard-actions/tobozo-esp32-qemu-sim/tree/v2.0.1) | [`939e90b`](https://github.com/tobozo/esp32-qemu-sim/commit/939e90b2e5ee29ab22b32351d722ac7e3154068f) |
 
 ## Privacy
