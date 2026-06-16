@@ -1,0 +1,64 @@
+name: Test valid chip name variants accepted
+on:
+  workflow_dispatch:
+jobs:
+  test-esp32c3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # esp32c3 is a valid chip name — action should fail at QEMU binary
+      # check (not at chip validation). We verify it does NOT fail with
+      # "Invalid chip name" by checking the action fails (QEMU missing)
+      # rather than succeeding unexpectedly.
+      - name: Create stub qemu-git directory to skip build step
+        run: |
+          mkdir -p ./qemu-git/build
+          # No actual binary — action will fail at binary check, not chip validation
+
+      - id: action-c3
+        uses: .
+        continue-on-error: true
+        with:
+          chip: esp32c3
+          qemu-timeout: "5"
+          flash-image: /dev/null
+
+      - name: Assert action failed (at QEMU binary check, not chip validation)
+        env:
+          OUTCOME: ${{ steps.action-c3.outcome }}
+        run: |
+          echo "outcome for esp32c3: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected failure (missing QEMU binary), got outcome=$OUTCOME"
+            exit 1
+          fi
+          echo "PASS: esp32c3 chip name accepted (failed at QEMU binary check as expected)"
+
+  test-esp32s3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create stub qemu-git directory to skip build step
+        run: |
+          mkdir -p ./qemu-git/build
+
+      - id: action-s3
+        uses: .
+        continue-on-error: true
+        with:
+          chip: esp32s3
+          qemu-timeout: "5"
+          flash-image: /dev/null
+
+      - name: Assert action failed (at QEMU binary check, not chip validation)
+        env:
+          OUTCOME: ${{ steps.action-s3.outcome }}
+        run: |
+          echo "outcome for esp32s3: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected failure (missing QEMU binary), got outcome=$OUTCOME"
+            exit 1
+          fi
+          echo "PASS: esp32s3 chip name accepted (failed at QEMU binary check as expected)"

@@ -1,6 +1,11 @@
 {
   "owner": "tobozo",
   "repo": "esp32-qemu-sim",
-  "version": "",
-  "url": "https://github.com/tobozo/esp32-qemu-sim"
+  "version": "v2.1.0",
+  "commit_sha": "c791ac713f8024b900812479e6d27305f5983db8",
+  "url": "https://github.com/tobozo/esp32-qemu-sim",
+  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "1",
+  "harden_agent_version": "1"
 }
