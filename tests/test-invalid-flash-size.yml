@@ -1,4 +1,4 @@
-name: Test debug mode input
+name: Test invalid flash size validation
 on:
   workflow_dispatch:
 
@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Create mock QEMU and esptool so we can test debug mode behavior
+      # Create mock QEMU and esptool so we can reach the flash size validation
       - name: Create mock QEMU and esptool
         run: |
           mkdir -p ./qemu-git/build
@@ -26,9 +26,8 @@ jobs:
           EOF
           chmod +x ./esptool/esptool.py
 
-      # Create a build folder with partitions.csv but missing binary files
-      # so the action fails at a predictable point after debug mode is activated
-      - name: Create minimal build folder
+      # Create a build folder with all required files so we reach flash size validation
+      - name: Create build folder with all required files
         run: |
           mkdir -p ./test-build
           cat > ./test-build/partitions.csv << 'EOF'
@@ -38,13 +37,18 @@ jobs:
           app0,     app,  ota_0,   0x10000, 0x140000,
           spiffs,   data, spiffs,  0x290000,0x170000,
           EOF
+          # Create dummy binary files
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/firmware.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/partitions.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/bootloader.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/boot_app0.bin 2>/dev/null
 
-      - name: Run action with debug=true
+      - name: Run action with invalid flash size
         id: action
         uses: .
         with:
-          debug: "true"
           build-folder: ./test-build
+          flash-size: "3"
           firmware-bin: firmware.bin
           partitions-bin: partitions.bin
           bootloader-bin: bootloader.bin
@@ -53,14 +57,11 @@ jobs:
           qemu-timeout: "5"
         continue-on-error: true
 
-      - name: Assert action failed at expected validation point (not due to debug flag)
+      - name: Assert action failed due to invalid flash size
         run: |
           echo "outcome: ${{ steps.action.outcome }}"
-          # The action should fail because binary files are missing, not because
-          # debug=true caused any issues. Either failure or success is acceptable
-          # as long as the action ran (i.e., it didn't crash due to the debug flag itself).
-          if [ "${{ steps.action.outcome }}" = "" ]; then
-            echo "FAIL: action did not produce an outcome"
+          if [ "${{ steps.action.outcome }}" != "failure" ]; then
+            echo "FAIL: expected action to fail with invalid flash size '3'"
             exit 1
           fi
-          echo "PASS: action ran with debug=true (outcome: ${{ steps.action.outcome }})"
+          echo "PASS: action correctly rejected invalid flash size"

@@ -1,0 +1,60 @@
+name: Test missing partitions.csv validation
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create mock QEMU and esptool so we can reach the partitions.csv validation
+      - name: Create mock QEMU and esptool
+        run: |
+          mkdir -p ./qemu-git/build
+          cat > ./qemu-git/build/qemu-system-xtensa << 'EOF'
+          #!/bin/bash
+          echo "fake qemu running"
+          sleep 1
+          EOF
+          chmod +x ./qemu-git/build/qemu-system-xtensa
+
+          mkdir -p ./esptool
+          cat > ./esptool/esptool.py << 'EOF'
+          #!/usr/bin/env python3
+          print("fake esptool running")
+          EOF
+          chmod +x ./esptool/esptool.py
+
+      # Create a build folder WITHOUT partitions.csv
+      - name: Create build folder without partitions.csv
+        run: |
+          mkdir -p ./test-build
+          # Only create binary files, no partitions.csv
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/firmware.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/partitions.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/bootloader.bin 2>/dev/null
+          dd if=/dev/zero bs=1024 count=4 of=./test-build/boot_app0.bin 2>/dev/null
+
+      - name: Run action with missing partitions.csv
+        id: action
+        uses: .
+        with:
+          build-folder: ./test-build
+          flash-size: "4"
+          firmware-bin: firmware.bin
+          partitions-bin: partitions.bin
+          bootloader-bin: bootloader.bin
+          otadata-bin: boot_app0.bin
+          partitions-csv: partitions.csv
+          qemu-timeout: "5"
+        continue-on-error: true
+
+      - name: Assert action failed due to missing partitions.csv
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" != "failure" ]; then
+            echo "FAIL: expected action to fail when partitions.csv is missing"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when partitions.csv is missing"

@@ -82,7 +82,7 @@ runs:
     # If no cached build exists, checkout qemu-xtensa
     - name: Checkout qemu-xtensa with flash size fix
       if: steps.cache-qemu.outputs.cache-hit != 'true'
-      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
       with:
         # Note: this should be espressif/qemu but this one has a fix for flash size
         #repository: listout/qemu
@@ -120,7 +120,7 @@ runs:
         python -m pip install --upgrade pip
         pip install --upgrade pyserial pytest-embedded intelhex rich-click
     - name: Checkout esptool.py
-      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+      uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
       with:
         repository: espressif/esptool
         path: './esptool'
@@ -128,6 +128,7 @@ runs:
       env:
         # Passing parameters to the script by setting the appropriate ENV_* variables.
         # Direct passing as arguments is not possible because of blanks in the arguments.
+        ACTION_PATH: ${{ github.action_path }}
         ENV_DEBUG: ${{ inputs.debug }}
         ENV_FLASH_SIZE: ${{ inputs.flash-size }}
         ENV_PSRAM: ${{ inputs.psram }}
@@ -143,7 +144,7 @@ runs:
         ENV_OTADATA_BIN: ${{ inputs.otadata-bin }}
         ENV_FIRMWARE_BIN: ${{ inputs.firmware-bin }}
         ENV_PARTITIONS_BIN: ${{ inputs.partitions-bin }}
-      run: "$GITHUB_ACTION_PATH/run-build-in-qemu.sh"
+      run: "$ACTION_PATH/run-build-in-qemu.sh"
       shell: bash
     # Store the output logs as an artifact
     - name: Upload logs as artifact
