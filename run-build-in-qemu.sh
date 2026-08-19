@@ -82,7 +82,11 @@ fi
 
 [[ "$ENV_FLASH_SIZE" =~ ^(2|4|8|16)$ ]] || exit_with_error "Invalid flash size (valid values=2,4,8,16)"
 #[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && exit_with_error "Invalid psram size (valid values=2,4,8,16)"
-[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && ENV_PSRAM="-m $ENV_PSRAM" || ENV_PSRAM=""
+if [[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]]; then
+  PSRAM_ARGS=(-m "$ENV_PSRAM")
+else
+  PSRAM_ARGS=()
+fi
 [[ "$ENV_QEMU_TIMEOUT" =~ ^[0-9]{1,3}$ ]] || exit_with_error "Invalid timeout value (valid values=0...999)"
 [[ "$ENV_BOOTLOADER_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid bootloader address '$ENV_BOOTLOADER_ADDR' (valid values=0x0000...0xffffffff)"
 [[ "$ENV_PARTITIONS_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid partitions address '$ENV_PARTITIONS_ADDR' (valid values=0x0000...0xffffffff)"
@@ -92,7 +96,7 @@ echo "[INFO] Extracting partitions info from $ENV_BUILD_FOLDER/$ENV_PARTITIONS_C
 
 OLD_IFS=$IFS
 
-csvdata=`cat "$ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV" | tr -d ' ' | tr '\n' ';'` # remove spaces, replace \n by semicolon
+csvdata=`cat $ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV | tr -d ' ' | tr '\n' ';'` # remove spaces, replace \n by semicolon
 
 IFS=';' read -ra rows <<< "$csvdata" # split lines
 
@@ -143,11 +147,11 @@ _debug "$ESPTOOL --chip $ENV_CHIP merge-bin --pad-to-size ${ENV_FLASH_SIZE}MB -o
 
 echo "[INFO] Running flash image in QEmu"
 _debug "QEmu timeout: $ENV_QEMU_TIMEOUT seconds"
-_debug "$QEMU_BIN -nographic -machine $ENV_CHIP $ENV_PSRAM -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
+_debug "$QEMU_BIN -nographic -machine $ENV_CHIP ${PSRAM_ARGS[*]} -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
 
 log_file=./logs.txt
 
-("$QEMU_BIN" -nographic -machine "$ENV_CHIP" $ENV_PSRAM -drive file=flash_image.bin,if=mtd,format=raw -global "driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true" | tee -a "$log_file") &
+("$QEMU_BIN" -nographic -machine "$ENV_CHIP" "${PSRAM_ARGS[@]}" -drive file=flash_image.bin,if=mtd,format=raw -global "driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true" | tee -a "$log_file") &
 
 
 if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
@@ -171,7 +175,7 @@ else
 
   _debug "Timing out in $ENV_QEMU_TIMEOUT seconds"
 
-  sleep $ENV_QEMU_TIMEOUT
+  sleep "$ENV_QEMU_TIMEOUT"
 
 fi
 
