@@ -50,7 +50,9 @@ fi
 
 [[ "$ENV_FLASH_SIZE" =~ ^(2|4|8|16)$ ]] || exit_with_error "Invalid flash size (valid values=2,4,8,16)"
 #[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && exit_with_error "Invalid psram size (valid values=2,4,8,16)"
-[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && PSRAM_ARGS=("-m" "$ENV_PSRAM") || PSRAM_ARGS=()
+# Build PSRAM flag array: either empty or ("-m" "VALUE")
+PSRAM_FLAGS=()
+[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && PSRAM_FLAGS=("-m" "$ENV_PSRAM")
 [[ "$ENV_QEMU_TIMEOUT" =~ ^[0-9]{1,3}$ ]] || exit_with_error "Invalid timeout value (valid values=0...999)"
 [[ "$ENV_BOOTLOADER_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid bootloader address '$ENV_BOOTLOADER_ADDR' (valid values=0x0000...0xffffffff)"
 [[ "$ENV_PARTITIONS_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid partitions address '$ENV_PARTITIONS_ADDR' (valid values=0x0000...0xffffffff)"
@@ -75,7 +77,7 @@ do
   esac
 done
 
-_debug "$(( set -o posix ; set ) | grep _ADDR)"
+_debug "$( ( set -o posix ; set ) | grep _ADDR)"
 
 IFS=$OLD_IFS
 
@@ -111,9 +113,9 @@ _debug "$ESPTOOL_PY --chip esp32 merge_bin --fill-flash-size ${ENV_FLASH_SIZE}MB
 
 echo "[INFO] Running flash image in QEmu"
 _debug "QEmu timeout: $ENV_QEMU_TIMEOUT seconds"
-_debug "$QEMU_BIN -nographic -machine esp32 ${PSRAM_ARGS[*]} -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.esp32.timg,property=wdt_disable,value=true"
+_debug "$QEMU_BIN -nographic -machine esp32 ${PSRAM_FLAGS[*]} -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.esp32.timg,property=wdt_disable,value=true"
 
-("$QEMU_BIN" -nographic -machine esp32 "${PSRAM_ARGS[@]}" -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.esp32.timg,property=wdt_disable,value=true | tee -a ./logs.txt) &
+("$QEMU_BIN" -nographic -machine esp32 "${PSRAM_FLAGS[@]}" -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.esp32.timg,property=wdt_disable,value=true | tee -a ./logs.txt) &
 
 sleep "$ENV_QEMU_TIMEOUT"
 killall qemu-system-xtensa || true

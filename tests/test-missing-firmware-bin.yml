@@ -1,0 +1,51 @@
+name: Test missing firmware binary validation
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a build folder with partitions.csv but WITHOUT firmware.bin
+      - name: Create build folder without firmware.bin
+        run: |
+          mkdir -p ./build
+          # Create a minimal partitions.csv with required entries
+          cat > ./build/partitions.csv << 'EOF'
+          # Name,   Type, SubType, Offset,  Size, Flags
+          nvs,      data, nvs,     0x9000,  0x5000,
+          otadata,  data, ota,     0xe000,  0x2000,
+          app0,     app,  ota_0,   0x10000, 0x140000,
+          spiffs,   data, spiffs,  0x290000,0x170000,
+          EOF
+          # Create some binary files but NOT firmware.bin (app0.bin)
+          dd if=/dev/zero bs=1024 count=4 of=./build/bootloader.bin
+          dd if=/dev/zero bs=1024 count=4 of=./build/partitions.bin
+          dd if=/dev/zero bs=1024 count=4 of=./build/boot_app0.bin
+          # Intentionally NOT creating firmware.bin
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          build-folder: ./build
+          flash-size: "4"
+          firmware-bin: firmware.bin
+          qemu-timeout: "5"
+
+      - name: Assert action failed on missing firmware.bin
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected when firmware.bin is missing"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "FAIL: action should have failed with missing firmware.bin"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
