@@ -82,11 +82,7 @@ fi
 
 [[ "$ENV_FLASH_SIZE" =~ ^(2|4|8|16)$ ]] || exit_with_error "Invalid flash size (valid values=2,4,8,16)"
 #[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && exit_with_error "Invalid psram size (valid values=2,4,8,16)"
-if [[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]]; then
-  PSRAM_ARGS=(-m "$ENV_PSRAM")
-else
-  PSRAM_ARGS=()
-fi
+[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && ENV_PSRAM="-m $ENV_PSRAM" || ENV_PSRAM=""
 [[ "$ENV_QEMU_TIMEOUT" =~ ^[0-9]{1,3}$ ]] || exit_with_error "Invalid timeout value (valid values=0...999)"
 [[ "$ENV_BOOTLOADER_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid bootloader address '$ENV_BOOTLOADER_ADDR' (valid values=0x0000...0xffffffff)"
 [[ "$ENV_PARTITIONS_ADDR" =~ ^0x[0-9a-zA-Z]{1,8}$ ]] || exit_with_error "Invalid partitions address '$ENV_PARTITIONS_ADDR' (valid values=0x0000...0xffffffff)"
@@ -147,11 +143,15 @@ _debug "$ESPTOOL --chip $ENV_CHIP merge-bin --pad-to-size ${ENV_FLASH_SIZE}MB -o
 
 echo "[INFO] Running flash image in QEmu"
 _debug "QEmu timeout: $ENV_QEMU_TIMEOUT seconds"
-_debug "$QEMU_BIN -nographic -machine $ENV_CHIP ${PSRAM_ARGS[*]} -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
+_debug "$QEMU_BIN -nographic -machine $ENV_CHIP $ENV_PSRAM -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
 
 log_file=./logs.txt
 
-("$QEMU_BIN" -nographic -machine "$ENV_CHIP" "${PSRAM_ARGS[@]}" -drive file=flash_image.bin,if=mtd,format=raw -global "driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true" | tee -a "$log_file") &
+psram_args=()
+if [[ -n "$ENV_PSRAM" ]]; then
+  psram_args=($ENV_PSRAM)
+fi
+("$QEMU_BIN" -nographic -machine "$ENV_CHIP" "${psram_args[@]}" -drive file=flash_image.bin,if=mtd,format=raw -global "driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true" | tee -a "$log_file") &
 
 
 if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
@@ -162,8 +162,8 @@ if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
   interval=1
 
   while ((timeout > 0)); do
-    sleep $interval
-    grep_result=`tail ${log_file} | grep "${ENV_TIMEOUT_INT_RE}"`
+    sleep "$interval"
+    grep_result=$(tail "$log_file" | grep "${ENV_TIMEOUT_INT_RE}")
     if [[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]; then
       _debug "[INFO] Got interrupt signal from esp32 $timeout seconds before timeout";
       break
