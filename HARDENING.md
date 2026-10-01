@@ -8,53 +8,42 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **tobozo--esp32-qemu-sim/v2.1.0** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
+Action **tobozo--esp32-qemu-sim/v2.1.0** was hardened automatically. 3 finding(s) were identified and resolved across 2 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-All 6 `uses:` references in action.yml use mutable version tags instead of pinned full-length SHA digests, making the action vulnerable to supply-chain attacks if any of those upstream actions are compromised or their tags are moved. Failing references:
-- `actions/cache@v3` (Cache QEmu build step)
-- `actions/checkout@v3` (Checkout qemu-xtensa step)
-- `actions/setup-python@v5.4.0` (Setup Python 3.11 step)
-- `actions/cache@v3` (Cache pip step)
-- `actions/checkout@v3` (Checkout esptool.py step)
-- `actions/upload-artifact@v4` (Upload logs as artifact step)
+All `uses:` references in action.yml use mutable tag refs instead of pinned 40-character SHA digests, making the action vulnerable to supply-chain attacks if the referenced tags are moved or compromised. Failing references: `actions/cache@v3` (×2), `actions/checkout@v3` (×2), `actions/setup-python@v5.4.0`, `actions/upload-artifact@v4`.
 
 Locations:
 
-- `action.yml:80`
 - `action.yml:87`
-- `action.yml:100`
+- `action.yml:93`
+- `action.yml:101`
 - `action.yml:107`
-- `action.yml:116`
-- `action.yml:136`
+- `action.yml:133`
+- `action.yml:155`
 
 ### script-injection (severity: high)
 
-Sub-rule (a): The `run:` field of the 'Run Build in QEmu' step directly interpolates a `${{ }}` expression: `run: ${{ github.action_path }}/run-build-in-qemu.sh`. Any `${{ ... }}` expression inside a `run:` block is a script-injection risk because the value is substituted by the YAML template engine before the shell ever sees it. The safe alternative is to use the `$GITHUB_ACTION_PATH` environment variable instead.
+Sub-rule (a): The `run:` field in the 'Run Build in QEmu' step directly interpolates a `${{ }}` expression: `run: ${{ github.action_path }}/run-build-in-qemu.sh`. Any `${{ ... }}` expression inside a `run:` block is subject to YAML template substitution before the shell processes it, making this a script-injection risk.
 
 Locations:
 
-- `action.yml:134`
+- `action.yml:143`
 
 ### script-injection (severity: high)
 
-Sub-rule (b): Multiple ENV_* shell variables — all sourced from `inputs.*` via the `env:` block in action.yml — are expanded unquoted inside `run-build-in-qemu.sh`, allowing shell metacharacter injection. Specific violations:
-1. Line ~143: `$ESPTOOL --chip $ENV_CHIP merge-bin --fill-flash-size ${ENV_FLASH_SIZE}MB -o $QEMU_FLASH_IMAGE $ENV_BOOTLOADER_ADDR $ENV_BUILD_FOLDER/$ENV_BOOTLOADER_BIN ...` — $ENV_CHIP, $ENV_FLASH_SIZE, $ENV_BUILD_FOLDER, $ENV_BOOTLOADER_BIN, $ENV_PARTITIONS_ADDR, $ENV_PARTITIONS_BIN, $ENV_FIRMWARE_BIN, $ENV_SPIFFS_BIN are all unquoted.
-2. Line ~155: `($QEMU_BIN -nographic -machine $ENV_CHIP $ENV_PSRAM -drive file=$QEMU_FLASH_IMAGE,...)` — $ENV_CHIP and $ENV_PSRAM are unquoted.
-3. Line ~108: `csvdata=\`cat $ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV | tr -d ' ' | tr '\n' ';'\`` — $ENV_BUILD_FOLDER and $ENV_PARTITIONS_CSV are unquoted in a backtick command substitution.
-4. Line ~175: `grep_result=\`tail ${log_file} | grep "${ENV_TIMEOUT_INT_RE}"\`` and `[[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]` — $ENV_TIMEOUT_INT_RE is unquoted in the =~ operator, allowing regex injection.
+Sub-rule (b): In `run-build-in-qemu.sh`, numerous `$ENV_*` variables — which are populated from `inputs.*` values via the `env:` block in action.yml — are expanded unquoted inside shell commands. Unquoted expansions allow shell metacharacters (`;`, `|`, `&`, `$(...)`, whitespace, globs) in attacker-controlled input values to be interpreted by the shell. Key offending lines include: `$ESPTOOL --chip $ENV_CHIP merge-bin --fill-flash-size ${ENV_FLASH_SIZE}MB -o $QEMU_FLASH_IMAGE ...` (all path and chip arguments unquoted); `$QEMU_BIN -nographic -machine $ENV_CHIP $ENV_PSRAM -drive file=$QEMU_FLASH_IMAGE,...` (chip, psram, and file path unquoted); `grep "${ENV_TIMEOUT_INT_RE}"` used in a backtick subshell and then `[[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]` with an unquoted regex pattern from user input.
 
 Locations:
 
-- `run-build-in-qemu.sh:143`
+- `run-build-in-qemu.sh:109`
+- `run-build-in-qemu.sh:133`
 - `run-build-in-qemu.sh:155`
-- `run-build-in-qemu.sh:108`
-- `run-build-in-qemu.sh:175`
 
 ## Iteration Notes
 
@@ -64,5 +53,13 @@ Locations:
 
 **Notes:**
 
-Fixed all 6 unpinned `uses:` references in action.yml by pinning to full commit SHAs: actions/cache@v3→6f8efc29b200d32929f49075959781ed54ec270c (×2), actions/checkout@v3→f43a0e5ff2bd294095638e18286ca9a3d1956744 (×2), actions/setup-python@v5.4.0→42375524e23c412d93fb67b49958b491fce71c38, actions/upload-artifact@v4→ea165f8d65b6e75b540449e92b4886f43607fa02. Fixed script injection in action.yml by replacing `${{ github.action_path }}` with `$GITHUB_ACTION_PATH`. Fixed script injection in run-build-in-qemu.sh: (1) quoted $ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV in csvdata command substitution and modernized to $(); (2) quoted all ENV_* variables in the esptool merge-bin command; (3) replaced unquoted $ENV_CHIP/$ENV_PSRAM in QEMU command with properly quoted variables and an array for PSRAM args to handle word-splitting safely; (4) replaced backtick grep with $() and grep -F for literal matching, stored $ENV_TIMEOUT_INT_RE in a local variable before use in =~ operator; (5) fixed killall backtick to use $() with proper quoting.
+Fixed all 6 unpinned action references in action.yml with full SHA digests. Fixed script injection in action.yml by moving github.action_path into env block as ACTION_PATH and referencing it as $ACTION_PATH in the run field. Fixed script injection in run-build-in-qemu.sh by: (1) converting ENV_PSRAM from a string '-m SIZE' to a proper bash array PSRAM_ARGS=(-m "$ENV_PSRAM") to safely handle the multi-token value; (2) quoting all variables in the esptool command; (3) quoting all variables in the QEMU run command using "${PSRAM_ARGS[@]}" for the array; (4) using $() instead of backticks for grep_result and killall, with -E flag for grep and quoted log_file; (5) keeping =~ RHS unquoted as correct bash idiom for regex matching.
+
+### Iteration 2
+
+**Fixes applied:** script-injection
+
+**Notes:**
+
+Fixed two unquoted variable expansions in hardened/action/run-build-in-qemu.sh: (1) Line 107: replaced backtick command substitution `cat $ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV` with $() syntax and double-quoted the path: `$(cat "$ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV" | ...)`. (2) Line 163: added double quotes to `sleep "$ENV_QEMU_TIMEOUT"`. Both variables are set from user-controlled inputs via the env: block in action.yml, so proper quoting prevents word-splitting and glob expansion attacks.
 

@@ -1,0 +1,33 @@
+name: Test debug mode input
+on:
+  workflow_dispatch:
+
+jobs:
+  test-debug-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run action with debug enabled and invalid chip to trigger early failure
+        id: action-debug-invalid
+        uses: .
+        continue-on-error: true
+        with:
+          debug: "true"
+          chip: bad-chip-name
+          flash-image: /nonexistent/flash.bin
+
+      - name: Assert action failed due to invalid chip (debug mode does not suppress errors)
+        env:
+          OUTCOME: ${{ steps.action-debug-invalid.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action correctly failed for invalid chip name even in debug mode"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "FAIL: action should have failed for invalid chip name 'bad-chip-name'"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

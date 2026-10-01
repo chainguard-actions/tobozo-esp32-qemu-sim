@@ -27,7 +27,11 @@ echo "[INFO] Validating target chip"
 
 # TODO query `$QEMU_BIN -machine ? | grep esp32` and compare
 [[ "$ENV_CHIP" =~ ^esp32(c3|s3)?$ ]] || exit_with_error "Invalid chip name, valid names are: esp32, esp32c3, esp32s3"
-[[ "$ENV_PSRAM" =~ ^(2M|4M|8M|16M|32M)$ ]] && ENV_PSRAM="-m $ENV_PSRAM" || ENV_PSRAM=""
+if [[ "$ENV_PSRAM" =~ ^(2M|4M|8M|16M|32M)$ ]]; then
+  PSRAM_ARGS=(-m "$ENV_PSRAM")
+else
+  PSRAM_ARGS=()
+fi
 
 case "$ENV_CHIP" in
     "esp32")
@@ -160,13 +164,6 @@ fi
 
 echo "[INFO] Running flash image in QEmu"
 _debug "QEmu timeout: $ENV_QEMU_TIMEOUT seconds"
-
-# Build PSRAM args array: ENV_PSRAM is either "" or "-m <size>"
-PSRAM_ARGS=()
-if [[ -n "$ENV_PSRAM" ]]; then
-  read -ra PSRAM_ARGS <<< "$ENV_PSRAM"
-fi
-
 _debug "$QEMU_BIN -nographic -machine $ENV_CHIP ${PSRAM_ARGS[*]} -drive file=$QEMU_FLASH_IMAGE,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
 
 log_file=./logs.txt
@@ -206,9 +203,8 @@ if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
 
   while ((timeout > 0)); do
     sleep $interval
-    grep_result=$(tail "${log_file}" | grep -F "${ENV_TIMEOUT_INT_RE}")
-    timeout_re="$ENV_TIMEOUT_INT_RE"
-    if [[ "$grep_result" =~ $timeout_re ]]; then
+    grep_result=$(tail "${log_file}" | grep -E "${ENV_TIMEOUT_INT_RE}")
+    if [[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]; then
       _debug "[INFO] Got interrupt signal from esp32 $timeout seconds before timeout";
       break
     fi
@@ -219,7 +215,7 @@ else
 
   _debug "Timing out in $ENV_QEMU_TIMEOUT seconds"
 
-  sleep $ENV_QEMU_TIMEOUT
+  sleep "$ENV_QEMU_TIMEOUT"
 
 fi
 
