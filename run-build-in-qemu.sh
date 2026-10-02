@@ -28,7 +28,7 @@ echo "[INFO] Validating target chip"
 # TODO query `$QEMU_BIN -machine ? | grep esp32` and compare
 [[ "$ENV_CHIP" =~ ^esp32(c3|s3)?$ ]] || exit_with_error "Invalid chip name, valid names are: esp32, esp32c3, esp32s3"
 if [[ "$ENV_PSRAM" =~ ^(2M|4M|8M|16M|32M)$ ]]; then
-  PSRAM_ARGS=(-m "$ENV_PSRAM")
+  PSRAM_ARGS=("-m" "$ENV_PSRAM")
 else
   PSRAM_ARGS=()
 fi
@@ -198,12 +198,12 @@ if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
 
   _debug "Timing out in $ENV_QEMU_TIMEOUT seconds unless output matches '$ENV_TIMEOUT_INT_RE'"
 
-  timeout=$ENV_QEMU_TIMEOUT
+  timeout="$ENV_QEMU_TIMEOUT"
   interval=1
 
   while ((timeout > 0)); do
-    sleep $interval
-    grep_result=$(tail "${log_file}" | grep -E "${ENV_TIMEOUT_INT_RE}")
+    sleep "$interval"
+    grep_result=`tail ${log_file} | grep "${ENV_TIMEOUT_INT_RE}"`
     if [[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]; then
       _debug "[INFO] Got interrupt signal from esp32 $timeout seconds before timeout";
       break
@@ -219,4 +219,4 @@ else
 
 fi
 
-killall "$(basename "$QEMU_BIN")" || true
+killall `basename $QEMU_BIN` || true
