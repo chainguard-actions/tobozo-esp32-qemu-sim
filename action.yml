@@ -128,7 +128,6 @@ runs:
       env:
         # Passing parameters to the script by setting the appropriate ENV_* variables.
         # Direct passing as arguments is not possible because of blanks in the arguments.
-        ACTION_PATH: ${{ github.action_path }}
         ENV_DEBUG: ${{ inputs.debug }}
         ENV_FLASH_SIZE: ${{ inputs.flash-size }}
         ENV_PSRAM: ${{ inputs.psram }}
@@ -144,7 +143,7 @@ runs:
         ENV_OTADATA_BIN: ${{ inputs.otadata-bin }}
         ENV_FIRMWARE_BIN: ${{ inputs.firmware-bin }}
         ENV_PARTITIONS_BIN: ${{ inputs.partitions-bin }}
-      run: "$ACTION_PATH/run-build-in-qemu.sh"
+      run: "$GITHUB_ACTION_PATH/run-build-in-qemu.sh"
       shell: bash
     # Store the output logs as an artifact
     - name: Upload logs as artifact
