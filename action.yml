@@ -79,7 +79,7 @@ runs:
     # If no cached build exists, checkout qemu-xtensa
     - name: Checkout qemu-xtensa with flash size fix
       if: steps.cache-qemu.outputs.cache-hit != 'true'
-      uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      uses: chainguard-actions/actions-checkout@44c54598b257617371589c99ff0b52dab29a2bb4 # v3
       with:
         # Note: this should be espressif/qemu but this one has a fix for flash size
         #repository: listout/qemu
@@ -99,7 +99,7 @@ runs:
         ninja -C build
     # Pull python 3.7 for esptool
     - name: Setup Python 3.8.13
-      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      uses: chainguard-actions/actions-setup-python@ae8c20f43efbbc48687020836bc4a5832ade8bea # v5.3.0
       with:
         python-version: '3.8.13'
     # Cache pip as we'll need pyserial to use esptool without python error
@@ -117,7 +117,7 @@ runs:
         python -m pip install --upgrade pip
         pip install --upgrade pyserial pytest-embedded intelhex
     - name: Checkout esptool.py
-      uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      uses: chainguard-actions/actions-checkout@44c54598b257617371589c99ff0b52dab29a2bb4 # v3
       with:
         repository: espressif/esptool
         path: './esptool'
@@ -144,7 +144,7 @@ runs:
       shell: bash
     # Store the output logs as an artifact
     - name: Upload logs as artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: chainguard-actions/actions-upload-artifact@61ae9717c37cd5ac5fcaa5599c0dab961d043ecc # v4
       with:
         name: Qemu Logs
         path: |
