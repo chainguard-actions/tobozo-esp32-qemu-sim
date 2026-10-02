@@ -10,91 +10,55 @@
 
 **Harden Agent Version:** `2`
 
-Action **tobozo--esp32-qemu-sim/v2.0.0** was hardened automatically. 3 finding(s) were identified and resolved across 2 iteration(s).
+Action **tobozo--esp32-qemu-sim/v2.0.0** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-Multiple `uses:` references in action.yml and workflow files use mutable tags or branch names instead of pinned 40-character SHA digests, making the action vulnerable to supply-chain attacks if the referenced tag is moved or the branch is updated.
-
-In action.yml:
-- `uses: actions/cache@v3` (appears twice)
-- `uses: actions/checkout@v3` (appears twice)
-- `uses: actions/setup-python@v5.4.0`
-- `uses: actions/upload-artifact@v4`
-
-In .github/workflows/test-esp32.yml:
-- `uses: actions/checkout@v3`
-- `uses: ArminJo/arduino-test-compile@v3.2.0`
-- `uses: tobozo/esp32-qemu-sim@main`
-
-In .github/workflows/test-esp32c3.yml:
-- `uses: actions/checkout@v3`
-- `uses: ArminJo/arduino-test-compile@v3.2.0`
-- `uses: tobozo/esp32-qemu-sim@main`
-
-In .github/workflows/test-esp32s3.yml:
-- `uses: actions/checkout@v3`
-- `uses: ArminJo/arduino-test-compile@v3.2.0`
-- `uses: tobozo/esp32-qemu-sim@main`
+action.yml references five actions using mutable tag/version refs instead of pinned 40-character SHA commit hashes. This exposes the workflow to supply-chain attacks if any of those tags are moved or compromised. Failing references: actions/cache@v3 (×2), actions/checkout@v3 (×2), actions/setup-python@v5.4.0, actions/upload-artifact@v4.
 
 Locations:
 
-- `action.yml:68`
-- `action.yml:76`
-- `action.yml:96`
+- `action.yml:72`
+- `action.yml:82`
 - `action.yml:103`
-- `action.yml:115`
-- `action.yml:155`
-- `.github/workflows/test-esp32.yml:16`
-- `.github/workflows/test-esp32.yml:20`
-- `.github/workflows/test-esp32.yml:34`
-- `.github/workflows/test-esp32c3.yml:16`
-- `.github/workflows/test-esp32c3.yml:20`
-- `.github/workflows/test-esp32c3.yml:34`
-- `.github/workflows/test-esp32s3.yml:16`
-- `.github/workflows/test-esp32s3.yml:20`
-- `.github/workflows/test-esp32s3.yml:35`
+- `action.yml:110`
+- `action.yml:122`
+- `action.yml:148`
 
 ### script-injection (severity: high)
 
-Sub-rule (a) violation: In the 'Run Build in QEmu' step of action.yml, the `run:` value directly interpolates a `${{ }}` expression: `run: ${{ github.action_path }}/run-build-in-qemu.sh`. Although `github.action_path` is not attacker-controlled in the same way as `github.head_ref`, any `${{ ... }}` expression inside a `run:` shell command string undergoes YAML template substitution before the shell processes it, which is a script-injection pattern. The safe alternative is to use the `$GITHUB_ACTION_PATH` environment variable instead.
+Rule (a): The `run:` block in the 'Run Build in QEmu' step directly interpolates the expression `${{ github.action_path }}` into the shell command string: `run: ${{ github.action_path }}/run-build-in-qemu.sh`. Any `${{ ... }}` expression inside a `run:` block is subject to YAML template substitution before the shell sees it, making this a script-injection risk.
 
 Locations:
 
-- `action.yml:148`
+- `action.yml:143`
 
-### missing-permissions (severity: medium)
+### script-injection (severity: high)
 
-None of the three workflow files define a top-level `permissions:` key, and no job within any of them defines a job-level `permissions:` key. Without explicit permissions, workflows run with the repository's default token permissions, which may be overly broad (e.g., write access to contents). Each workflow file should declare minimal required permissions.
+Rule (b): run-build-in-qemu.sh uses numerous unquoted `$ENV_*` shell variable expansions in command invocations. These variables are populated directly from `inputs.*` values via the `env:` block in action.yml and are therefore workflow-controllable. Unquoted expansions allow shell metacharacters (`;`, `|`, `&`, `$(...)`, whitespace, globs) embedded in input values to be interpreted by the shell. Examples of unquoted uses: `$ENV_CHIP` in `case $ENV_CHIP`, in the qemu invocation `-machine $ENV_CHIP`, and in `$ESPTOOL --chip $ENV_CHIP merge-bin ...`; `$ENV_PSRAM` in `-machine $ENV_CHIP $ENV_PSRAM`; `$ENV_BUILD_FOLDER`, `$ENV_BOOTLOADER_BIN`, `$ENV_PARTITIONS_BIN`, `$ENV_OTADATA_BIN`, `$ENV_FIRMWARE_BIN`, `$ENV_SPIFFS_BIN` all passed unquoted to esptool; `$ENV_QEMU_TIMEOUT` passed unquoted to `sleep`; `${ENV_TIMEOUT_INT_RE}` used unquoted in `grep`. All of these should be double-quoted.
 
 Locations:
 
-- `.github/workflows/test-esp32.yml:1`
-- `.github/workflows/test-esp32c3.yml:1`
-- `.github/workflows/test-esp32s3.yml:1`
+- `run-build-in-qemu.sh:30`
+- `run-build-in-qemu.sh:119`
+- `run-build-in-qemu.sh:121`
+- `run-build-in-qemu.sh:122`
+- `run-build-in-qemu.sh:123`
+- `run-build-in-qemu.sh:124`
+- `run-build-in-qemu.sh:125`
+- `run-build-in-qemu.sh:131`
+- `run-build-in-qemu.sh:143`
+- `run-build-in-qemu.sh:148`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection, missing-permissions
+**Fixes applied:** unpinned-uses, script-injection
 
 **Notes:**
 
-Fixed all three findings: (1) Pinned all 9 unique action references across action.yml and 3 workflow files to full 40-char SHAs using lookup_action_sha, preserving original tags as comments. (2) Replaced `${{ github.action_path }}` template expression in the run: shell command with the built-in `$GITHUB_ACTION_PATH` environment variable to eliminate script-injection risk. (3) Added `permissions: contents: read` top-level block to all three workflow files (test-esp32.yml, test-esp32c3.yml, test-esp32s3.yml) — the minimal permission needed for checkout operations.
-
-### Iteration 2
-
-**Fixes applied:** script-injection
-
-**Notes:**
-
-Fixed all unquoted $ENV_* variable expansions in run-build-in-qemu.sh:
-1. Line ~97 (csvdata): Replaced backtick with $() and quoted $ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV.
-2. Line ~121 (esptool command): Quoted $ESPTOOL, $ENV_CHIP, ${ENV_FLASH_SIZE}MB, $ENV_BOOTLOADER_ADDR, $ENV_BUILD_FOLDER/$ENV_BOOTLOADER_BIN, $ENV_PARTITIONS_ADDR, $ENV_BUILD_FOLDER/$ENV_PARTITIONS_BIN, $OTADATA_ADDR, $ENV_BUILD_FOLDER/$ENV_OTADATA_BIN, $FIRMWARE_ADDR, $ENV_BUILD_FOLDER/$ENV_FIRMWARE_BIN, $SPIFFS_ADDR, $ENV_BUILD_FOLDER/$ENV_SPIFFS_BIN.
-3. Line ~130 (QEMU command): Quoted $QEMU_BIN and $ENV_CHIP; replaced $ENV_PSRAM (which was set to '-m value' as a string) with a bash array PSRAM_ARGS=(-m "$ENV_PSRAM") to keep flag and value as separate arguments; quoted $log_file in tee.
-4. Line ~143 (sleep): Quoted $ENV_QEMU_TIMEOUT.
-5. Additional: Fixed timeout=$ENV_QEMU_TIMEOUT assignment, sleep $interval, tail ${log_file} backtick, grep_result backtick, and killall backtick.
+Fixed all 6 unpinned action references in action.yml by pinning to full commit SHAs (actions/cache@v3→6f8efc29, actions/checkout@v3→a37ce912, actions/setup-python@v5.4.0→42375524, actions/upload-artifact@v4→ea165f8d). Fixed script injection in action.yml by moving ${{ github.action_path }} to env block as ACTION_PATH and referencing it as "$ACTION_PATH/run-build-in-qemu.sh" in run:. Fixed script injection in run-build-in-qemu.sh by double-quoting all unquoted $ENV_* variables in command invocations (esptool call, QEMU invocation, sleep, log_file, csvdata). Refactored $ENV_PSRAM from a string with embedded spaces to a bash array (PSRAM_ARGS) to safely handle the optional -m flag in the QEMU invocation.
 

@@ -83,7 +83,7 @@ fi
 [[ "$ENV_FLASH_SIZE" =~ ^(2|4|8|16)$ ]] || exit_with_error "Invalid flash size (valid values=2,4,8,16)"
 #[[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]] && exit_with_error "Invalid psram size (valid values=2,4,8,16)"
 if [[ "$ENV_PSRAM" =~ ^(2M|4M)$ ]]; then
-  PSRAM_ARGS=(-m "$ENV_PSRAM")
+  PSRAM_ARGS=("-m" "$ENV_PSRAM")
 else
   PSRAM_ARGS=()
 fi
@@ -96,7 +96,7 @@ echo "[INFO] Extracting partitions info from $ENV_BUILD_FOLDER/$ENV_PARTITIONS_C
 
 OLD_IFS=$IFS
 
-csvdata=$(cat "$ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV" | tr -d ' ' | tr '\n' ';') # remove spaces, replace \n by semicolon
+csvdata=`cat "$ENV_BUILD_FOLDER/$ENV_PARTITIONS_CSV" | tr -d ' ' | tr '\n' ';'` # remove spaces, replace \n by semicolon
 
 IFS=';' read -ra rows <<< "$csvdata" # split lines
 
@@ -147,7 +147,7 @@ _debug "$ESPTOOL --chip $ENV_CHIP merge-bin --pad-to-size ${ENV_FLASH_SIZE}MB -o
 
 echo "[INFO] Running flash image in QEmu"
 _debug "QEmu timeout: $ENV_QEMU_TIMEOUT seconds"
-_debug "$QEMU_BIN -nographic -machine $ENV_CHIP $ENV_PSRAM -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
+_debug "$QEMU_BIN -nographic -machine $ENV_CHIP ${PSRAM_ARGS[*]} -drive file=flash_image.bin,if=mtd,format=raw -global driver=timer.$ENV_CHIP.timg,property=wdt_disable,value=true"
 
 log_file=./logs.txt
 
@@ -158,12 +158,12 @@ if [[ "$ENV_TIMEOUT_INT_RE" != "" ]]; then
 
   _debug "Timing out in $ENV_QEMU_TIMEOUT seconds unless output matches '$ENV_TIMEOUT_INT_RE'"
 
-  timeout="$ENV_QEMU_TIMEOUT"
+  timeout=$ENV_QEMU_TIMEOUT
   interval=1
 
   while ((timeout > 0)); do
     sleep "$interval"
-    grep_result=$(tail "$log_file" | grep "${ENV_TIMEOUT_INT_RE}")
+    grep_result=`tail "${log_file}" | grep "${ENV_TIMEOUT_INT_RE}"`
     if [[ "$grep_result" =~ $ENV_TIMEOUT_INT_RE ]]; then
       _debug "[INFO] Got interrupt signal from esp32 $timeout seconds before timeout";
       break
@@ -179,4 +179,4 @@ else
 
 fi
 
-killall "$(basename "$QEMU_BIN")" || true
+killall `basename $QEMU_BIN` || true
